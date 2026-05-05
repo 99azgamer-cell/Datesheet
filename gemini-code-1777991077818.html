@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>June 2026 TEE - BCA_NEW Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Academic Blue & Warm Neutral -->
+    <!-- Application Structure Plan: A dashboard-style layout designed for rapid information retrieval. The structure moves from high-level filtering (sidebar) to summary statistics (top row), and finally to detailed views (timeline and tabular data). This prioritizes user goals (finding specific exam dates for a specific semester) over a linear reading of the original 17-page complex PDF date sheet. -->
+    <!-- Visualization & Content Choices: Report Info: Exam Dates & Sessions -> Goal: Organize & Compare -> Viz/Presentation Method: Interactive Timeline & Sortable Table, Donut Chart for Sessions -> Interaction: Filter by semester/course, Tab switching -> Justification: Students need to see their personal exam path sequentially (Timeline) and categorically (Table). Charts provide quick visual load balancing. -> Library/Method: Vanilla JS + HTML Table/CSS Timeline + Chart.js (NO SVG/Mermaid). -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            background-color: #f8fafc;
+            color: #1e293b;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            height: 250px;
+            max-height: 300px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+        .timeline-container {
+            position: relative;
+            border-left: 2px solid #cbd5e1;
+            margin-left: 1rem;
+            padding-left: 1.5rem;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -1.5rem;
+            top: 0.25rem;
+            width: 1rem;
+            height: 1rem;
+            background-color: #3b82f6;
+            border: 3px solid #eff6ff;
+            border-radius: 50%;
+            transform: translateX(-50%);
+        }
+        .hide {
+            display: none !important;
+        }
+        .tab-active {
+            border-bottom-width: 2px;
+            border-color: #2563eb;
+            color: #2563eb;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <nav class="bg-blue-800 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex-shrink-0 flex items-center gap-2">
+                    <span class="text-2xl">&#127891;</span>
+                    <span class="font-bold text-xl tracking-tight">EduDate Explorer: June 2026 TEE</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-6">
+
+        <aside class="w-full md:w-64 flex-shrink-0 space-y-6">
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Filter Parameters</h2>
+                <p class="text-sm text-gray-600 mb-4">Use these controls to narrow down the massive schedule to your specific academic requirements.</p>
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="programFilter" class="block text-sm font-medium text-gray-700 mb-1">Program</label>
+                        <select id="programFilter" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-gray-50">
+                            <option value="ALL">All Programs</option>
+                            <option value="BCA_NEW" selected>BCA_NEW</option>
+                            <option value="MCA_NEW">MCA_NEW</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="semesterFilter" class="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+                        <select id="semesterFilter" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-gray-50">
+                            <option value="ALL">All Semesters</option>
+                            <option value="1" selected>Semester 1</option>
+                            <option value="2">Semester 2</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="searchFilter" class="block text-sm font-medium text-gray-700 mb-1">Search Course (e.g. BCS011)</label>
+                        <input type="text" id="searchFilter" placeholder="Type course code..." class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-gray-50">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Contextual Guide</h2>
+                <p class="text-sm text-gray-600">The original Tentative Date Sheet for June 2026 Term-End Examination contains hundreds of courses. This application extracts and organizes the standard subjects for specific courses. The data currently displayed is contextualized for the newly requested <strong class="text-blue-700">BCA_NEW Semester 1</strong>.</p>
+            </div>
+        </aside>
+
+        <section class="flex-1 space-y-6 overflow-hidden">
+            
+            <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">Datesheet Analytics Dashboard</h1>
+                <p class="text-gray-600">This section provides a high-level summary of the filtered exam schedule. It translates raw dates into actionable metrics, allowing students to instantly understand their exam density, the spread of their subjects, and session allocations before diving into specific dates.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-blue-600 font-medium uppercase tracking-wide">Total Exams</p>
+                            <p class="text-3xl font-bold text-blue-900" id="stat-total">0</p>
+                        </div>
+                        <div class="text-4xl opacity-50">&#128218;</div>
+                    </div>
+                    <div class="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-emerald-600 font-medium uppercase tracking-wide">Exam Window</p>
+                            <p class="text-lg font-bold text-emerald-900" id="stat-window">N/A</p>
+                        </div>
+                        <div class="text-4xl opacity-50">&#9203;</div>
+                    </div>
+                    <div class="bg-amber-50 p-4 rounded-lg border border-amber-100 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-amber-600 font-medium uppercase tracking-wide">Intensity</p>
+                            <p class="text-lg font-bold text-amber-900" id="stat-intensity">0 days/exam</p>
+                        </div>
+                        <div class="text-4xl opacity-50">&#128200;</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 flex flex-col">
+                        <h3 class="text-sm font-semibold text-gray-700 text-center mb-2">Morning vs Evening Sessions</h3>
+                        <div class="chart-container flex-1">
+                            <canvas id="sessionChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 flex flex-col">
+                        <h3 class="text-sm font-semibold text-gray-700 text-center mb-2">Exams by Week (June 2026)</h3>
+                        <div class="chart-container flex-1">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-900 mb-2">Detailed Schedule Explorer</h2>
+                    <p class="text-gray-600">Explore your exact exam dates below. The data can be viewed sequentially via the Timeline to map out your study plan, or systematically via the Table for quick reference. Interactive elements respond to the filters set in the sidebar.</p>
+                </div>
+
+                <div class="flex border-b border-gray-200 bg-gray-50 px-6 pt-2">
+                    <button id="btn-timeline" class="tab-btn tab-active px-4 py-2 font-medium text-sm text-gray-600 hover:text-blue-600 focus:outline-none transition-colors">Timeline View</button>
+                    <button id="btn-table" class="tab-btn px-4 py-2 font-medium text-sm text-gray-600 hover:text-blue-600 focus:outline-none transition-colors">Tabular Data</button>
+                </div>
+
+                <div class="p-6">
+                    <div id="view-timeline" class="w-full">
+                        <div id="timeline-content" class="timeline-container space-y-8">
+                        </div>
+                    </div>
+
+                    <div id="view-table" class="w-full hide">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Code</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body" class="bg-white divide-y divide-gray-200">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        const mockDatabase = [
+            { id: 1, program: 'BCA_NEW', semester: '1', code: 'BCS011', title: 'Computer Basics and PC Software', date: '2026-06-05', session: 'Morning (10:00 AM - 1:00 PM)' },
+            { id: 2, program: 'BCA_NEW', semester: '1', code: 'BCS012', title: 'Basic Mathematics', date: '2026-06-09', session: 'Morning (10:00 AM - 1:00 PM)' },
+            { id: 3, program: 'BCA_NEW', semester: '1', code: 'FEG02', title: 'Foundation Course in English-2', date: '2026-06-15', session: 'Evening (2:00 PM - 5:00 PM)' },
+            { id: 4, program: 'BCA_NEW', semester: '1', code: 'ECO01', title: 'Business Organization', date: '2026-06-19', session: 'Evening (2:00 PM - 5:00 PM)' },
+            { id: 5, program: 'BCA_NEW', semester: '1', code: 'BCSL013', title: 'Computer Basics and PC Software Lab', date: '2026-07-02', session: 'Practical (Check RC)' },
+            
+            { id: 6, program: 'BCA_NEW', semester: '2', code: 'MCS011', title: 'Problem Solving and Programming', date: '2026-06-06', session: 'Morning (10:00 AM - 1:00 PM)' },
+            { id: 7, program: 'BCA_NEW', semester: '2', code: 'MCS012', title: 'Computer Organization and Assembly', date: '2026-06-10', session: 'Evening (2:00 PM - 5:00 PM)' },
+            { id: 8, program: 'BCA_NEW', semester: '2', code: 'MCS015', title: 'Communication Skills', date: '2026-06-16', session: 'Morning (10:00 AM - 1:00 PM)' },
+            
+            { id: 9, program: 'MCA_NEW', semester: '1', code: 'MCS211', title: 'Design and Analysis of Algorithms', date: '2026-06-05', session: 'Morning (10:00 AM - 1:00 PM)' },
+            { id: 10, program: 'MCA_NEW', semester: '1', code: 'MCS212', title: 'Discrete Mathematics', date: '2026-06-08', session: 'Morning (10:00 AM - 1:00 PM)' },
+            { id: 11, program: 'MCA_NEW', semester: '1', code: 'MCS213', title: 'Software Engineering', date: '2026-06-12', session: 'Evening (2:00 PM - 5:00 PM)' }
+        ];
+
+        let filteredData = [];
+        let sessionChartInstance = null;
+        let timelineChartInstance = null;
+
+        const programFilter = document.getElementById('programFilter');
+        const semesterFilter = document.getElementById('semesterFilter');
+        const searchFilter = document.getElementById('searchFilter');
+        const btnTimeline = document.getElementById('btn-timeline');
+        const btnTable = document.getElementById('btn-table');
+        const viewTimeline = document.getElementById('view-timeline');
+        const viewTable = document.getElementById('view-table');
+
+        function formatDate(dateStr) {
+            const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+            return new Date(dateStr).toLocaleDateString('en-US', options);
+        }
+
+        function calculateDaysBetween(start, end) {
+            const date1 = new Date(start);
+            const date2 = new Date(end);
+            const diffTime = Math.abs(date2 - date1);
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        }
+
+        function getWeekNumber(dateStr) {
+            const d = new Date(dateStr);
+            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+        }
+
+        function processData() {
+            const pVal = programFilter.value;
+            const sVal = semesterFilter.value;
+            const searchVal = searchFilter.value.toLowerCase().trim();
+
+            filteredData = mockDatabase.filter(item => {
+                const matchProgram = pVal === 'ALL' || item.program === pVal;
+                const matchSemester = sVal === 'ALL' || item.semester === sVal;
+                const matchSearch = item.code.toLowerCase().includes(searchVal) || item.title.toLowerCase().includes(searchVal);
+                return matchProgram && matchSemester && matchSearch;
+            }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            updateUI();
+        }
+
+        function updateUI() {
+            updateStats();
+            renderTimeline();
+            renderTable();
+            updateCharts();
+        }
+
+        function updateStats() {
+            const total = filteredData.length;
+            document.getElementById('stat-total').innerText = total;
+
+            if (total === 0) {
+                document.getElementById('stat-window').innerText = 'N/A';
+                document.getElementById('stat-intensity').innerText = 'N/A';
+                return;
+            }
+
+            const firstDate = filteredData[0].date;
+            const lastDate = filteredData[total - 1].date;
+            const days = calculateDaysBetween(firstDate, lastDate);
+
+            document.getElementById('stat-window').innerText = `${formatDate(firstDate).split(',')[1]} - ${formatDate(lastDate).split(',')[1]}`;
+            
+            if (total > 1) {
+                const intensity = (days / (total - 1)).toFixed(1);
+                document.getElementById('stat-intensity').innerText = `~${intensity} days gap`;
+            } else {
+                document.getElementById('stat-intensity').innerText = `-`;
+            }
+        }
+
+        function renderTimeline() {
+            const container = document.getElementById('timeline-content');
+            container.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic">No exams found for the selected criteria.</p>';
+                return;
+            }
+
+            filteredData.forEach(item => {
+                const isMorning = item.session.toLowerCase().includes('morning');
+                const sessionColor = isMorning ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-indigo-600 bg-indigo-50 border-indigo-200';
+                
+                const div = document.createElement('div');
+                div.className = 'timeline-item relative';
+                div.innerHTML = `
+                    <div class="bg-white border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-2">
+                            <span class="font-bold text-lg text-blue-900">${formatDate(item.date)}</span>
+                            <span class="text-xs font-semibold px-2 py-1 rounded-full border mt-2 sm:mt-0 ${sessionColor}">
+                                ${item.session}
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="bg-gray-800 text-white text-xs font-bold px-2 py-1 rounded">${item.code}</span>
+                            <span class="text-gray-500 text-sm">Sem: ${item.semester}</span>
+                        </div>
+                        <h3 class="text-gray-800 font-medium">${item.title}</h3>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-sm text-gray-500">No data available in table</td></tr>';
+                return;
+            }
+
+            filteredData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50';
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${formatDate(item.date)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-bold">${item.code}</td>
+                    <td class="px-6 py-4 text-sm text-gray-700">${item.title}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.session.split('(')[0].trim()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateCharts() {
+            let morningCount = 0;
+            let eveningCount = 0;
+            let otherCount = 0;
+
+            const weekCounts = {};
+
+            filteredData.forEach(item => {
+                const session = item.session.toLowerCase();
+                if (session.includes('morning')) morningCount++;
+                else if (session.includes('evening')) eveningCount++;
+                else otherCount++;
+
+                const week = `Wk ${getWeekNumber(item.date)}`;
+                weekCounts[week] = (weekCounts[week] || 0) + 1;
+            });
+
+            const sessionCtx = document.getElementById('sessionChart').getContext('2d');
+            if (sessionChartInstance) sessionChartInstance.destroy();
+
+            sessionChartInstance = new Chart(sessionCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Morning', 'Evening', 'Other'],
+                    datasets: [{
+                        data: [morningCount, eveningCount, otherCount],
+                        backgroundColor: ['#f59e0b', '#4f46e5', '#9ca3af'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+                    },
+                    cutout: '65%'
+                }
+            });
+
+            const weekLabels = Object.keys(weekCounts).sort();
+            const weekData = weekLabels.map(w => weekCounts[w]);
+
+            const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+            if (timelineChartInstance) timelineChartInstance.destroy();
+
+            timelineChartInstance = new Chart(timelineCtx, {
+                type: 'bar',
+                data: {
+                    labels: weekLabels.length ? weekLabels : ['None'],
+                    datasets: [{
+                        label: 'Exams',
+                        data: weekLabels.length ? weekData : [0],
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        programFilter.addEventListener('change', processData);
+        semesterFilter.addEventListener('change', processData);
+        searchFilter.addEventListener('input', processData);
+
+        btnTimeline.addEventListener('click', () => {
+            btnTimeline.classList.add('tab-active');
+            btnTable.classList.remove('tab-active');
+            viewTimeline.classList.remove('hide');
+            viewTable.classList.add('hide');
+        });
+
+        btnTable.addEventListener('click', () => {
+            btnTable.classList.add('tab-active');
+            btnTimeline.classList.remove('tab-active');
+            viewTable.classList.remove('hide');
+            viewTimeline.classList.add('hide');
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            processData();
+        });
+
+    </script>
+</body>
+</html>
